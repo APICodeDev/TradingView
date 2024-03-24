@@ -1,0 +1,80 @@
+// This work is licensed under a Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0) https://creativecommons.org/licenses/by-nc-sa/4.0/
+// © Apicode
+// "Tenkan" se refiere a una de las líneas en el indicador Ichimoku Kinko Hyo
+// La línea Tenkan, también conocida como la línea de conversión, 
+// se calcula tomando la suma del máximo más alto y el mínimo más bajo 
+// durante un período de tiempo específico (generalmente los últimos 9 períodos), 
+// y luego dividiendo esa suma por 2. La línea resultante se traza en el gráfico 
+// y actúa como un indicador de impulso y dirección de la tendencia.
+// ---
+// La línea Kijun, también conocida como la línea base, se calcula tomando 
+// la suma del máximo más alto y el mínimo más bajo durante un período de 
+// tiempo específico (generalmente los últimos 26 períodos), 
+// y luego dividiendo esa suma por 2. 
+// Al igual que la línea Tenkan, la línea Kijun se traza en el gráfico y 
+// actúa como un indicador de impulso y dirección de la tendencia.
+// ---
+// Cuando la línea Tenkan cruza por encima de la línea Kijun, 
+// puede interpretarse como una señal alcista, y cuando cruza 
+// por debajo de la línea Kijun, puede interpretarse como una señal bajista
+// ---
+// Senkou Span B (junto con Senkou Span A) es una de las dos líneas que forman la nube en el 
+// indicador Ichimoku Kinko Hyo. Esta nube, también conocida como Kumo, 
+// es una parte esencial del análisis técnico en el sistema de Ichimoku. 
+// La línea Senkou Span B se calcula sumando el máximo más alto y el mínimo más bajo 
+// de los últimos 52 períodos y luego dividiendo el resultado por 2. 
+// La línea resultante se traza adelantada 26 períodos en el futuro.
+
+//@version=5
+indicator("Apicode Ichimoku Kinko Hyo [LUX]",'Apicode Ichimoku',overlay=true,max_lines_count=500)
+tenkan_len  = input(9,'Tenkan          ',inline='tenkan')
+tenkan_mult = input(2.,'',inline='tenkan')
+
+kijun_len   = input(26,'Kijun             ',inline='kijun')
+kijun_mult  = input(4.,'',inline='kijun')
+
+spanB_len   = input(52,'Senkou Span B ',inline='span')
+spanB_mult  = input(6.,'',inline='span')
+
+offset      = input(26,'Desplazamiento')
+//------------------------------------------------------------------------------
+avg(src,length,mult)=>
+    atr = ta.atr(length)*mult
+    up = hl2 + atr
+    dn = hl2 - atr
+    upper = 0.,lower = 0.
+    upper := src[1] < upper[1] ? math.min(up,upper[1]) : up
+    lower := src[1] > lower[1] ? math.max(dn,lower[1]) : dn
+    
+    os = 0,max = 0.,min = 0.
+    os := src > upper ? 1 : src < lower ? 0 : os[1]
+    spt = os == 1 ? lower : upper
+    max := ta.cross(src,spt) ? math.max(src,max[1]) : os == 1 ? math.max(src,max[1]) : spt
+    min := ta.cross(src,spt) ? math.min(src,min[1]) : os == 0 ? math.min(src,min[1]) : spt
+    math.avg(max,min)
+//------------------------------------------------------------------------------
+tenkan = avg(close,tenkan_len,tenkan_mult)
+kijun = avg(close,kijun_len,kijun_mult)
+
+senkouA = math.avg(kijun,tenkan)
+senkouB = avg(close,spanB_len,spanB_mult)
+//------------------------------------------------------------------------------
+tenkan_css = #2157f3
+kijun_css = #ff5d00
+
+cloud_a = color.new(color.teal,80)
+cloud_b = color.new(color.red,80)
+
+chikou_css = #7b1fa2
+
+plot(tenkan,'Tenkan-Sen',tenkan_css)
+plot(kijun,'Kijun-Sen',kijun_css)
+
+plot(ta.crossover(tenkan,kijun) ? kijun : na,'Crossover',#2157f3,3,plot.style_circles)
+plot(ta.crossunder(tenkan,kijun) ? kijun : na,'Crossunder',#ff5d00,3,plot.style_circles)
+
+A = plot(senkouA,'Senkou Span A',na,offset=offset-1)
+B = plot(senkouB,'Senkou Span B',na,offset=offset-1)
+fill(A,B,senkouA > senkouB ? cloud_a : cloud_b)
+
+plot(close,'Chikou',chikou_css,offset=-offset+1,display=display.none)
