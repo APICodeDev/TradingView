@@ -8,6 +8,11 @@
 //Estas líneas se derivan de los precios más altos y más bajos observados durante un período de tiempo específico, 
 //típicamente utilizando un rango de tiempo establecido, como 20 o 55 periodos.
 
+//Valores por Temporalidad:
+// 25 / 20  -> 1m a 30m
+// 35 / 20  -> 45m a 2H
+// 55 / 20  -> 3H  a 1D (o incluso superior a 1D)
+
 //Cálculo de las líneas del canal:
 //   Se selecciona un período de tiempo, como 20 o 55 períodos.
 //   Se calcula el precio más alto observado durante ese período de tiempo. Esta será la línea superior del canal.
@@ -21,8 +26,8 @@
 //-------------------------------------------------
 
 indicator("Apicode Turtle Channels", shorttitle="Apicode Turtle Channels", overlay=true)
-
-length = input.int(55, "Longitud de Entrada", minval=1)
+//Los valores estandar son 55/20, pero para temporalidades cortas es mejor 25/20
+length = input.int(25, "Longitud de Entrada", minval=1)
 len2 = input.int(20, "Longitud de Salida", minval=1)
 showsignals = input.bool(title="Mostrar señales Entrar/Salir ?", defval=true)
 highlighting = input.bool(title="Destacar On/Off ?", defval=true)
@@ -64,24 +69,14 @@ E4 = ta.barssince(sellExit[1])
 
 //Indica cuando entrar en una posición de compra
 plotshape(buySignal and O3 < O1[1] ? down : na, title="Long Entry", location=location.absolute, style=shape.circle, size=size.tiny, color=color.new(color.green, 0), transp=0)
-//plotshape(buySignal and showsignals and O3 < O1[1] ? down : na, title="Long", text="Compra", location=location.absolute, style=shape.labelup, size=size.tiny, color=color.new(color.green, 0), textcolor=color.white, transp=0)
-
-var label myLabel1 = na
-if (buySignal and showsignals and O3 < O1[1])
-    myLabel1 := label.new(x = bar_index, y = low - (ta.atr(30) * 2), text = "Entrar", style = label.style_label_up, color = color.rgb(20, 88, 5), size = size.normal, textcolor = color.white, tooltip = "Entrar")
-
-
+plotshape(buySignal and showsignals and O3 < O1[1] ? down : na, title="Entrar", text="Entrar", location=location.absolute, style=shape.labelup, size=size.tiny, color=color.new(color.green, 0), textcolor=color.white, transp=0)
 
 //plotshape(sellSignal and O4 < O2[1] ? up : na, title="Short Entry", location=location.absolute, style=shape.circle, size=size.tiny, color=color.new(color.red, 0), transp=0)
 //plotshape(sellSignal and showsignals and O4 < O2[1] ? up : na, title="Short", text="Short Entry", location=location.absolute, style=shape.labeldown, size=size.tiny, color=color.new(color.red, 0), textcolor=color.white, transp=0)
 
-plotshape(buyExit and O1 < O3[1] ? up : na, title="Long Exit", location=location.absolute, style=shape.circle, size=size.tiny, color=color.new(color.blue, 0), transp=0)
-//plotshape(buyExit and showsignals and O1 < O3[1] ? up : na, title="Long Exit", text="Exit Long", location=location.absolute, style=shape.labeldown, size=size.tiny, color=color.new(color.blue, 0), textcolor=color.white, transp=0)
-
 //indica cuando salir de una posición 
-var label myLabel = na
-if (buyExit and showsignals and O1 < O3[1])
-    myLabel := label.new(x = bar_index, y = high + (ta.atr(30) * 2), text = "Salir", style = label.style_label_down, color = color.blue, size = size.normal, textcolor = color.white, tooltip = "Salir")
+plotshape(buyExit and O1 < O3[1] ? up : na, title="Long Exit", location=location.absolute, style=shape.circle, size=size.tiny, color=color.new(color.blue, 0), transp=0)
+plotshape(buyExit and showsignals and O1 < O3[1] ? up : na, title="Salir", text="Salir", location=location.absolute, style=shape.labeldown, size=size.tiny, color=color.new(color.blue, 0), textcolor=color.white, transp=0)
 
 //plotshape(sellExit and O2 < O4[1] ? down : na, title="Short Exit", location=location.absolute, style=shape.circle, size=size.tiny, color=color.new(color.blue, 0), transp=0)
 //plotshape(sellExit and showsignals and O2 < O4[1] ? down : na, title="Short", text="Exit Short", location=location.absolute, style=shape.labelup, size=size.tiny, color=color.new(color.blue, 0), textcolor=color.white, transp=0)
