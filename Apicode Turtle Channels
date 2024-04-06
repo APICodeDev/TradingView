@@ -1,0 +1,92 @@
+//@version=5
+//Los "Turtle Channels" son un tipo de indicador técnico utilizado en análisis técnico para identificar tendencias 
+//y posibles puntos de entrada y salida en el mercado. 
+//Este indicador fue popularizado por el famoso trader de materias primas Richard Dennis y su socio William Eckhardt, 
+//quienes entrenaron a un grupo de personas conocidas como "Turtles" utilizando esta metodología.
+
+//El indicador de "Turtle Channels" consiste en dos líneas paralelas que rodean el precio actual. 
+//Estas líneas se derivan de los precios más altos y más bajos observados durante un período de tiempo específico, 
+//típicamente utilizando un rango de tiempo establecido, como 20 o 55 periodos.
+
+//Cálculo de las líneas del canal:
+//   Se selecciona un período de tiempo, como 20 o 55 períodos.
+//   Se calcula el precio más alto observado durante ese período de tiempo. Esta será la línea superior del canal.
+//   Se calcula el precio más bajo observado durante el mismo período de tiempo. Esta será la línea inferior del canal.
+//   Ambas líneas se dibujan en el gráfico, formando el "canal" que rodea al precio actual.
+
+//Interpretación:
+//   Cuando el precio se encuentra dentro del canal, se considera que el mercado está en un estado de consolidación o rango.
+//   Cuando el precio rompe por encima de la línea superior del canal, se considera una señal alcista o de compra.
+//   Cuando el precio rompe por debajo de la línea inferior del canal, se considera una señal bajista o de venta.
+//-------------------------------------------------
+
+indicator("Apicode Turtle Channels", shorttitle="Apicode Turtle Channels", overlay=true)
+
+length = input.int(55, "Longitud de Entrada", minval=1)
+len2 = input.int(20, "Longitud de Salida", minval=1)
+showsignals = input.bool(title="Mostrar señales Entrar/Salir ?", defval=true)
+highlighting = input.bool(title="Destacar On/Off ?", defval=true)
+
+lower = ta.lowest(length)
+upper = ta.highest(length)
+
+u = plot(upper, "Upper", color=color.new(#0094FF, 90))
+l = plot(lower, "Lower", color=color.new(#0094FF, 90))
+
+up = ta.highest(high, length)
+down = ta.lowest(low, length)
+sup = ta.highest(high, len2)
+sdown = ta.lowest(low, len2)
+
+K1 = ta.barssince(high >= up[1]) <= ta.barssince(low <= down[1]) ? down : up
+K2 = ta.barssince(high >= up[1]) <= ta.barssince(low <= down[1]) ? sdown : sup
+    
+K3 =  (close > K1) ? down : na
+K4 =  (close < K1) ? up : na
+
+plot(K1, title="Trend Line", color=color.rgb(255, 82, 82, 47), linewidth=2)
+e = plot(K2, title="Exit Line", color=color.rgb(33, 149, 243, 35), linewidth=1, style=plot.style_stepline)
+
+buySignal = high == upper[1] or ta.crossover(high, upper[1])
+sellSignal = low == lower[1] or ta.crossover(lower[1], low)
+buyExit = low == sdown[1] or ta.crossover(sdown[1], low)
+sellExit = high == sup[1] or ta.crossover(high, sup[1])
+
+O1 = ta.barssince(buySignal)
+O2 = ta.barssince(sellSignal)
+O3 = ta.barssince(buyExit)
+O4 = ta.barssince(sellExit)
+
+E1 = ta.barssince(buySignal[1])
+E2 = ta.barssince(sellSignal[1])
+E3 = ta.barssince(buyExit[1])
+E4 = ta.barssince(sellExit[1])
+
+//Indica cuando entrar en una posición de compra
+plotshape(buySignal and O3 < O1[1] ? down : na, title="Long Entry", location=location.absolute, style=shape.circle, size=size.tiny, color=color.new(color.green, 0), transp=0)
+//plotshape(buySignal and showsignals and O3 < O1[1] ? down : na, title="Long", text="Compra", location=location.absolute, style=shape.labelup, size=size.tiny, color=color.new(color.green, 0), textcolor=color.white, transp=0)
+
+var label myLabel1 = na
+if (buySignal and showsignals and O3 < O1[1])
+    myLabel1 := label.new(x = bar_index, y = low - (ta.atr(30) * 2), text = "Entrar", style = label.style_label_up, color = color.rgb(20, 88, 5), size = size.normal, textcolor = color.white, tooltip = "Entrar")
+
+
+
+//plotshape(sellSignal and O4 < O2[1] ? up : na, title="Short Entry", location=location.absolute, style=shape.circle, size=size.tiny, color=color.new(color.red, 0), transp=0)
+//plotshape(sellSignal and showsignals and O4 < O2[1] ? up : na, title="Short", text="Short Entry", location=location.absolute, style=shape.labeldown, size=size.tiny, color=color.new(color.red, 0), textcolor=color.white, transp=0)
+
+plotshape(buyExit and O1 < O3[1] ? up : na, title="Long Exit", location=location.absolute, style=shape.circle, size=size.tiny, color=color.new(color.blue, 0), transp=0)
+//plotshape(buyExit and showsignals and O1 < O3[1] ? up : na, title="Long Exit", text="Exit Long", location=location.absolute, style=shape.labeldown, size=size.tiny, color=color.new(color.blue, 0), textcolor=color.white, transp=0)
+
+//indica cuando salir de una posición 
+var label myLabel = na
+if (buyExit and showsignals and O1 < O3[1])
+    myLabel := label.new(x = bar_index, y = high + (ta.atr(30) * 2), text = "Salir", style = label.style_label_down, color = color.blue, size = size.normal, textcolor = color.white, tooltip = "Salir")
+
+//plotshape(sellExit and O2 < O4[1] ? down : na, title="Short Exit", location=location.absolute, style=shape.circle, size=size.tiny, color=color.new(color.blue, 0), transp=0)
+//plotshape(sellExit and showsignals and O2 < O4[1] ? down : na, title="Short", text="Exit Short", location=location.absolute, style=shape.labelup, size=size.tiny, color=color.new(color.blue, 0), textcolor=color.white, transp=0)
+
+color1 = highlighting and math.min(O1, O2, O3) == O1 ? color.rgb(7, 109, 11) : na
+color2 = highlighting and math.min(O1, O2, O4) == O2 ? color.red : na
+fill(u, e, color=color.new(color1, 90), title="Background")
+fill(l, e, color=color.new(color2, 90), title="Background")
