@@ -1,0 +1,65 @@
+//@version=5
+// Este indicador te ayudará a saber cuándo puedes comprar y vender.
+// Se basa en las medias móviles y en MACD 
+// Cuando la linea MACD (azul) cruza hacia arriba la linea "signal" (naranja), compruebs luego que la vela esté por encima de la media simple (del grafico), en tal caso indicará "COMPRA"
+// Cuando la linea MACD (azul) cruza hacia abajo la linea "signal" (naranja), comprueba luego que la vela esté por debajo de la media simple o que la vela sea roja, en tal caso indicará "VENDE"
+// ----
+indicator("Apicode SMA y MACD", overlay=true)
+
+// Definir las medias móviles
+sma20 = ta.sma(close, 20)
+sma200 = ta.sma(close, 200)
+
+// Calcular MACD
+[macdLine, signalLine, _] = ta.macd(close, 12, 26, 9)
+
+// Determinar si las líneas MACD cruzan hacia arriba
+macd_cruz_arriba = ta.crossover(macdLine, signalLine)
+
+// Determinar si las líneas MACD cruzan hacia abajo
+macd_cruz_abajo = ta.crossunder(macdLine, signalLine)
+
+// Determinar si el precio está por encima de la media móvil de 20 períodos
+precio_encima_sma20 = close > sma20
+
+// Determinar si el precio está por debajo de la media móvil de 20 períodos
+precio_debajo_sma20 = close < sma20
+
+// Calcular la posición vertical de la etiqueta
+y_positionComprar = ta.lowest(close, 50)  // Puedes ajustar el número 50 según tu preferencia
+y_positionVender = ta.highest(close, 50)  // Puedes ajustar el número 50 según tu preferencia
+colorDeVela = close > open ? 'verde' : 'roja'
+// Mostrar etiqueta "COMPRAR" cuando las MACD crucen hacia arriba y el precio esté por encima de la media móvil de 20 períodos
+if macd_cruz_arriba and (precio_encima_sma20 or colorDeVela == 'verde')
+    label.new(bar_index, y_positionComprar, text="COMPRA", style=label.style_label_up, color=color.green,textcolor=color.white)
+    line.new(x1=bar_index, y1=y_positionComprar, x2=bar_index, y2=close, width=1, color=color.green, style=line.style_dashed)
+// Mostrar etiqueta "VENDER" cuando las MACD crucen hacia abajo y el precio esté por debajo de la media móvil de 20 períodos
+if macd_cruz_abajo and (precio_debajo_sma20 or  colorDeVela == 'roja')
+    label.new(bar_index, y_positionVender, text="VENDE", style=label.style_label_down, color=color.red,textcolor=color.white)
+    line.new(x1=bar_index, y1=y_positionVender, x2=bar_index, y2=close, width=1, color=color.red, style=line.style_dashed)
+
+// Dibujar medias móviles
+plot(sma20, color=color.blue, title="SMA 20")
+plot(sma200, color=color.red, title="SMA 200")
+
+// Getting inputs
+VerMACD = input.bool(title="Ver MACD", defval=true)
+
+// Obtener entradas solo si se debe mostrar la MACD
+fast_length = VerMACD ? input.int(title = "Fast Length", defval = 12) : na
+slow_length = VerMACD ? input.int(title = "Slow Length", defval = 26) : na
+src = VerMACD ? input.source(title = "Source", defval = close) : na
+signal_length = VerMACD ? input.int(title = "Signal Smoothing", minval = 1, maxval = 50, defval = 9, display = display.data_window) : na
+sma_source = VerMACD ? input.string(title = "Oscillator MA Type", defval = "EMA", options = ["SMA", "EMA"], display = display.data_window) : na
+sma_signal = VerMACD ? input.string(title = "Signal Line MA Type", defval = "EMA", options = ["SMA", "EMA"], display = display.data_window) : na
+
+// Calcular solo si se debe mostrar la MACD
+fast_ma = VerMACD ? (sma_source == "SMA" ? ta.sma(src, fast_length) : ta.ema(src, fast_length)) : na
+slow_ma = VerMACD ? (sma_source == "SMA" ? ta.sma(src, slow_length) : ta.ema(src, slow_length)) : na
+macd = VerMACD ? (fast_ma - slow_ma) * 4 : na
+signal = VerMACD ? (sma_signal == "SMA" ? ta.sma(macd, signal_length) : ta.ema(macd, signal_length)) : na
+hist = VerMACD ? macd - signal : na
+
+// Trazar solo si se debe mostrar la MACD
+plot(macd, title = "MACD", color = color.rgb(9, 146, 28))
+plot(signal, title = "Signal", color = #FF6D00)
