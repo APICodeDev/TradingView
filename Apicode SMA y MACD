@@ -31,11 +31,11 @@ y_positionVender = ta.highest(close, 50)  // Puedes ajustar el número 50 según
 colorDeVela = close > open ? 'verde' : 'roja'
 // Mostrar etiqueta "COMPRAR" cuando las MACD crucen hacia arriba y el precio esté por encima de la media móvil de 20 períodos
 if macd_cruz_arriba and (precio_encima_sma20 or colorDeVela == 'verde')
-    label.new(bar_index, y_positionComprar, text="COMPRA", style=label.style_label_up, color=color.green,textcolor=color.white)
+    label.new(bar_index, y_positionComprar, text="COMPRA", style=label.style_label_up, color=color.green,textcolor=color.white, size = size.small)
     line.new(x1=bar_index, y1=y_positionComprar, x2=bar_index, y2=close, width=1, color=color.green, style=line.style_dashed)
 // Mostrar etiqueta "VENDER" cuando las MACD crucen hacia abajo y el precio esté por debajo de la media móvil de 20 períodos
 if macd_cruz_abajo and (precio_debajo_sma20 or  colorDeVela == 'roja')
-    label.new(bar_index, y_positionVender, text="VENDE", style=label.style_label_down, color=color.red,textcolor=color.white)
+    label.new(bar_index, y_positionVender, text="VENDE", style=label.style_label_down, color=color.red,textcolor=color.white, size = size.small)
     line.new(x1=bar_index, y1=y_positionVender, x2=bar_index, y2=close, width=1, color=color.red, style=line.style_dashed)
 
 // Dibujar medias móviles
