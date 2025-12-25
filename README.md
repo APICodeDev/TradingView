@@ -1,3 +1,49 @@
+# Advanced Crypto Trading Strategy for DOGEUSDT
+
+This repository contains a Pine Script strategy for cryptocurrency trading focused on liquidity zones and volume analysis, specifically designed for DOGEUSDT on 15-minute timeframe.
+
+## Files Included
+
+1. `doge_strategy.pine` - The main Pine Script strategy code
+2. `strategy_documentation.md` - Detailed documentation about the strategy
+
+## Strategy Overview
+
+The strategy implements advanced techniques for cryptocurrency trading:
+- Liquidity zone detection using pivot points
+- Volume analysis for confirmation
+- Multi-timeframe trend detection
+- VWAP-based liquidity analysis
+- ATR-based risk management
+- Configurable profit targets (minimum 2%)
+
+## How to Use
+
+1. Copy the contents of `doge_strategy.pine` to TradingView Pine Editor
+2. Apply to DOGEUSDT chart with 15-minute timeframe
+3. Set date range for backtesting (recommended: 1 year)
+4. Run the strategy and analyze performance metrics
+
+## Key Features
+
+- Dynamic support/resistance levels
+- Volume-based entry confirmation
+- Trailing stops for profit protection
+- Comprehensive performance statistics
+- Risk management controls
+
+## Performance Metrics
+
+The strategy tracks and displays:
+- Win rate percentage
+- Number of winning/losing trades
+- Average win/loss amounts
+- Total profit/loss
+
+Note: This strategy is designed for volatile cryptocurrency markets and should be used with appropriate risk management.
+
+---
+
 En esta sección se publican los mejores indicadores para Tradingview. Se analizan diversos indicadores clave y se forman mensajes / alarmas en base a las conclusiones.
 
 Todos estos indicadores y estrategias han sido testados con éxito durante un largo periodo de tiempo, con el fin de asegurar su eficacia. 
