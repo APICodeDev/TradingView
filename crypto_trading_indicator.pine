@@ -1,5 +1,5 @@
 //@version=5
-indicator("Multi-Factor Crypto Entry Indicator", overlay=true, max_lines_count=500, max_labels_count=500)
+indicator("Multi-Factor Crypto Entry Indicator", overlay=true, max_lines_count=500, max_labels_count=500, dynamic_requests=true)
 
 // Input parameters for user customization
 // Trend Analysis Settings
@@ -40,6 +40,10 @@ ma(src, length) =>
         "RMA" => ta.rma(src, length)
         "WMA" => ta.wma(src, length)
 
+// Get higher timeframe data outside conditional structures
+[h_close, h_open] = request.security(syminfo.tickerid, higher_tf, [close, open], lookahead=barmerge.lookahead_off)
+higher_trend_value = ma(h_close, trend_length)
+
 // Trend Analysis
 trend_ma = ma(close, trend_length)
 trend_up = close > trend_ma
@@ -47,11 +51,8 @@ trend_down = close < trend_ma
 
 // Higher timeframe trend analysis
 var float higher_trend = na
-var float higher_trend_value = na
 if higher_tf != ""
-    [h_close, h_open] = request.security(syminfo.tickerid, higher_tf, [close, open], lookahead=barmerge.lookahead_off)
-    higher_trend := h_close > ma(h_close, trend_length)
-    higher_trend_value := ma(h_close, trend_length)
+    higher_trend := h_close > higher_trend_value
 
 // Support and Resistance Levels
 var float highest_high = na
