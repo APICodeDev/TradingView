@@ -1,6 +1,75 @@
+# Multi-Factor Crypto Entry Indicator
+
 En esta sección se publican los mejores indicadores para Tradingview. Se analizan diversos indicadores clave y se forman mensajes / alarmas en base a las conclusiones.
 
-Todos estos indicadores y estrategias han sido testados con éxito durante un largo periodo de tiempo, con el fin de asegurar su eficacia. 
+Todos estos indicadores y estrategias han sido testados con éxito durante un largo periodo de tiempo, con el fin de asegurar su eficacia.
+
+## Multi-Factor Crypto Entry Indicator
+
+A comprehensive Pine Script indicator for TradingView that combines multiple technical analysis factors to generate reliable buy and sell signals for cryptocurrency trading.
+
+### Features
+
+- **Support and Resistance Analysis**: Identifies key support and resistance levels based on configurable lookback periods
+- **Candlestick Pattern Recognition**: Detects important patterns like doji, engulfing patterns, hammers, and shooting stars
+- **Volume Analysis**: Compares current volume to average volume to identify high-volume periods
+- **Trend Analysis**: Uses multiple moving average types to determine trend direction
+- **Multi-Timeframe Analysis**: Incorporates higher timeframe trend for confluence
+- **Take Profit Lines**: Automatically calculates and displays take profit levels based on minimum 2% target
+- **Configurable Parameters**: All values are customizable by the user
+
+### Input Parameters
+
+#### Trend Analysis Settings
+- **Trend Length**: Number of bars to calculate trend (default: 20)
+- **Trend MA Type**: Moving average type (SMA, EMA, RMA, WMA) (default: EMA)
+
+#### Support and Resistance Settings
+- **Support/Resistance Length**: Number of bars to look back for S/R levels (default: 50)
+- **S/R Tolerance**: Percentage tolerance for identifying S/R zones (default: 0.5%)
+
+#### Volume Analysis Settings
+- **Volume MA Length**: Period for average volume calculation (default: 20)
+- **Volume Threshold**: Multiplier for average volume to consider high volume (default: 1.5)
+
+#### Candlestick Pattern Settings
+- **Doji Body Threshold**: Maximum body size as % of range for doji (default: 0.1)
+- **Engulfing Ratio**: Minimum ratio for engulfing patterns (default: 1.1)
+
+#### Profit Settings
+- **Minimum Profit Target %**: Minimum target return (default: 2.0%)
+- **Profit Target Distance Factor**: Factor for volatility-based targets (default: 0.5)
+
+#### Timeframe Analysis Settings
+- **Higher Timeframe for Trend**: Timeframe to analyze higher trend (default: 240 minutes)
+
+#### Visual Settings
+- **Show Entry Labels**: Toggle for buy/sell labels (default: true)
+- **Show Take Profit Lines**: Toggle for TP lines (default: true)
+- **Color settings** for various elements
+
+### Signal Conditions
+
+#### Buy Signal
+Generated when all of the following conditions are met:
+- Price is near support level
+- Bullish candlestick pattern detected (engulfing, doji, or hammer)
+- High volume compared to average
+- Uptrend confirmed by moving average or higher timeframe trend
+
+#### Sell Signal
+Generated when all of the following conditions are met:
+- Price is near resistance level
+- Bearish candlestick pattern detected (engulfing, doji, hanging man, or shooting star)
+- High volume compared to average
+- Downtrend confirmed by moving average or higher timeframe trend
+
+### Take Profit Calculation
+
+The indicator automatically calculates take profit levels based on:
+- Minimum 2% target from entry price
+- Volatility-adjusted targets using ATR
+- Market conditions and impulse moves
 
 ### 1. Introducción al Trading y Herramientas Más Utilizadas
 
@@ -61,3 +130,16 @@ El miedo, la avaricia y la esperanza son emociones comunes que pueden influir en
 ### 8. Resumen del Tema
 
 En resumen, el trading implica comprar y vender activos financieros con el objetivo de obtener beneficios. Los traders utilizan una variedad de herramientas, incluidos el análisis técnico y fundamental, así como indicadores técnicos, para analizar los mercados y tomar decisiones comerciales. La gestión del riesgo y el control de las emociones son fundamentales para el éxito a largo plazo en el trading.
+
+## Usage Instructions
+
+1. Copy the Pine Script code to TradingView
+2. Apply to any cryptocurrency chart
+3. Adjust parameters according to your trading style
+4. Look for "BUY" or "SELL" labels on the chart
+5. Use the displayed take profit lines as exit targets
+6. Monitor the information table in the top-right corner for market conditions
+
+## Risk Disclaimer
+
+This indicator is for educational and analytical purposes only. No indicator is 100% reliable, and past performance does not guarantee future results. Always use proper risk management and never risk more than you can afford to lose.
