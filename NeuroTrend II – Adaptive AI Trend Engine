@@ -1,0 +1,398 @@
+//@version=6
+//-----------------------------------------------------------------------------
+// NeuroTrend II – Adaptive AI Trend Engine
+//
+// Description:
+// NeuroTrend is an adaptive, AI-assisted trend indicator designed for momentum
+// and swing trading. It uses dynamic EMAs, slope forecasting, neural memory,
+// and a trend classification engine to deliver real-time insights. The system
+// includes confidence scoring, reversal detection, and a premium visual dashboard.
+//
+// Key Features:
+// • Adaptive EMA smoothing based on volatility and momentum conditions
+// • Real-time slope angle, power, and projected trend forecasts
+// • Neural memory system for volatility-aware threshold calibration
+// • Classification of trend phases: Impulse, Cooling, Reversal, Stall, Neutral
+// • Confidence score derived from DMI, slope, and volatility ratio
+// • Reversal and stall zone detection with alert labeling
+// • AI-style commentary with smart coaching logic
+// • Compact dashboard with all trend diagnostics in one view
+//
+// Usage:
+// Best used to time entries
+// into strong trend conditions, confirm trend continuation, or detect exhaustion
+// before reversals.
+//
+// Author: AresIQ adapted by Apicode
+// License: Mozilla Public License 2.0
+// Terms: This open-source script may be modified and reused with attribution.
+//
+// Link to License: https://www.mozilla.org/en-US/MPL/2.0/
+//-----------------------------------------------------------------------------
+
+indicator(title = "NeuroTrend II Apicode", shorttitle = "NeuroTrend II", overlay=true)
+
+// USER INPUTS \
+enableReflex = input.bool(false, "Enable Reflex Mode", inline="reflex", group="Turbo Mode")
+showCommentary = input.bool(true, "Show AI Commentary", inline="ai", group="Neuro Settings")
+tablePosition = input.string("Top Right", "Dashboard Position", options=["Top Left", "Top Middle", "Top Right", "Bottom Left", "Bottom Middle", "Bottom Right"], group="Neuro Settings")
+pos = tablePosition == "Top Left"      ? position.top_left :
+      tablePosition == "Top Middle"    ? position.top_center :
+      tablePosition == "Top Right"     ? position.top_right :
+      tablePosition == "Bottom Left"   ? position.bottom_left :
+      tablePosition == "Bottom Middle" ? position.bottom_center :
+      position.bottom_right
+
+commentaryTextColor = input.color(color.white, "Commentary Text Color", inline="commentaryColor", group="Neuro Settings")
+tableTextColor = input.color(color.white, "Dashboard Text Color", group="Neuro Settings")
+
+baseFast = input.int(12, "Base Fast EMA (12)")
+baseSlow = input.int(24, "Base Slow EMA (24)")
+showConfidence = input.bool(true, "Show Confidence Score", inline="conf", group="Neuro Settings")
+showReversal = input.bool(true, "Show Reversal Warnings", inline="rev", group="Neuro Settings")
+showStall = input.bool(true, "Show Stall Alerts", inline="stall", group="Neuro Settings")
+showProjection = input.bool(true, "Show Slope Projection", inline="proj", group="Neuro Settings")
+showForecast = input.bool(true, "Show Forecast Signals", inline="forecast", group="Neuro Settings")
+showConfirmation = input.bool(true, "Show Early Confirmations", inline="confirm", group="Neuro Settings")
+enableAlerts = input.bool(true, "Enable Smart Alerts", inline="alerts", group="Alerts")
+
+// EARLY TREND CHANGE FORECASTING CONTROLS \
+forecastLookahead = input.int(3, "Forecast Lookahead Bars", minval=1, maxval=10, group="Neuro Settings")
+forecastSlopeThreshold = input.float(12.0, "Forecast Slope Threshold", minval=1.0, step=0.5, group="Neuro Settings")
+forecastAccelerationThreshold = input.float(1.5, "Forecast Accel Threshold", minval=0.2, step=0.1, group="Neuro Settings")
+
+// EARLY CONFIRMATION CONTROLS \
+confirmWindow = input.int(4, "Confirm Window Bars", minval=1, maxval=10, group="Neuro Settings")
+confirmSlopeThreshold = input.float(6.0, "Confirm Slope Threshold", minval=1.0, step=0.5, group="Neuro Settings")
+confirmAdxThreshold = input.float(18.0, "Confirm ADX Threshold", minval=5.0, step=0.5, group="Neuro Settings")
+confirmRequireForecast = input.bool(false, "Confirmation Requires Forecast", group="Neuro Settings")
+
+// CUSTOM ALERT BUILDER \
+
+customEnableAlerts     = input.bool(false, "Enable Custom Alerts", group="Alerts")
+customMinConfidence    = input.int(60, "Min Confidence (60)", minval=0, maxval=100, group="Alerts")
+customRequireImpulse   = input.bool(true, "Require Impulse", group="Alerts")
+customRequireBullish   = input.bool(false, "Only Bullish Trends", group="Alerts")
+customRequireBearish   = input.bool(false, "Only Bearish Trends", group="Alerts")
+customBlockReversal    = input.bool(true, "Ignore Reversal Risk", group="Alerts")
+customBlockStall       = input.bool(false, "Ignore Stall", group="Alerts")
+
+ndistance = input.float(defval=3,title="Distance over", group="Neuro Settings")
+
+//MGD - Sirve para que no aparezcan dos señales seguidas en la misma dirección
+var string lastSignal = na
+var float lastBar = na
+//---
+
+// SESSION PHASE DETECTION \
+hourNow = hour(time)
+minuteNow = minute(time)
+sessionMinute = (hourNow - 9) * 60 + minuteNow - 30  // 0 at 9:30 AM
+
+sessionPhase = sessionMinute < 90 ? "⏰ Session matinal" :
+               sessionMinute < 270 ? "😴 media sesión" :
+               sessionMinute <= 390 ? "⚡ Hora crítica" :
+               "⏳ Fuera de horario"
+
+// CONTEXT \
+atr = ta.atr(14)
+rsi = ta.rsi(close, 14)
+volFactor = atr / close
+momentumFactor = (rsi - 50) / 100
+
+// ADAPTIVE LENGTHS \
+fastLen = enableReflex ? baseFast * 0.75 : baseFast - volFactor * 5 + momentumFactor * 5
+slowLen = enableReflex ? baseSlow * 0.85 : baseSlow + volFactor * 5 - momentumFactor * 5
+alphaFast = 2.0 / (fastLen + 1.0)
+alphaSlow = 2.0 / (slowLen + 1.0)
+
+
+// ADAPTIVE EMA FUNCTION \
+adaptiveEMA(src, alpha) =>
+    var float result = na
+    result := na(result[1]) ? src : alpha * src + (1 - alpha) * result[1]
+
+// EMAS \
+emaFast = adaptiveEMA(close, alphaFast)
+emaSlow = adaptiveEMA(close, alphaSlow)
+
+// SLOPE METRICS \
+slopeNorm = (emaFast - emaSlow) / atr
+slopeDeg = math.atan(slopeNorm) * 180 / math.pi
+slopePower = enableReflex ? slopeDeg * (1 + volFactor * 0.5 + momentumFactor * 1.5) : slopeDeg * (1 + volFactor + momentumFactor)
+glowIntensity = math.min(math.abs(slopePower), 50)
+
+// COLOR ENGINE \
+baseColor = slopePower > 0 ? color.rgb(38, 230, 0) : color.rgb(168, 45, 36)
+
+// RENDER LAYERS \
+glowBase = slopePower > 0 ? color.rgb(80, 255, 100) : color.rgb(255, 70, 70)
+coreColor = color.new(glowBase, 0)
+glow1 = color.new(glowBase, 75)
+glow2 = color.new(glowBase, 85)
+shadowTrail = color.new(glowBase, 92)
+
+plot(emaFast, title="Fast EMA Core", color=coreColor, linewidth=3,display = display.none)
+plot(emaFast, title="Glow Layer 1", color=glow1, linewidth=6,display = display.none)
+plot(emaFast, title="Glow Layer 2", color=glow2, linewidth=9,display = display.none)
+plot(emaSlow, title="Slow EMA", color=color.new(glowBase, 80), linewidth=2,display = display.none)
+plot(emaFast[5], title="Shadow Trail", color=shadowTrail, linewidth=1, style=plot.style_line,display = display.none)
+
+//  FILLS \
+fill(plot(emaFast,display = display.none), plot(emaSlow,display = display.none), color=color.new(glowBase, 90), title="Trend Ribbon Fill")
+
+// NEURAL MEMORY ENGINE \
+atrMemory = ta.sma(atr, enableReflex ? 20 : 50)
+slopeStdDev = ta.stdev(slopePower, enableReflex ? 20 : 50)
+volatilityState = (atr / atrMemory + slopeStdDev / 30) / 2
+volatilityFactor = math.min(math.max(volatilityState, 0.5), 1.5)
+
+// Auto-calibrated thresholds
+impulseThreshold = 20 * volatilityFactor
+coolingThreshold = 10 * volatilityFactor
+stallSlopeLimit = 5 * volatilityFactor
+rsiFlatMin = 48 - (5 * (volatilityFactor - 1))
+rsiFlatMax = 52 + (5 * (volatilityFactor - 1))
+
+// TREND STATE CLASSIFIER \
+isImpulse  = math.abs(slopePower) > impulseThreshold
+isCooling  = math.abs(slopePower) > coolingThreshold and math.abs(slopePower) <= impulseThreshold
+isNeutral  = math.abs(slopePower) <= 20
+isReversal = ta.change(slopeDeg, 1) < -30 or rsi < 40
+trendDir = slopePower > 0 ? "Bullish" : "Bearish"
+
+// TREND AGE & DECAY \
+var int trendAge = 0
+trendAge := trendDir == trendDir[1] ? trendAge + 1 : 1
+decayFactor = math.max(1.0 - trendAge / 100, 0.5)  // Caps decay at 50%
+
+trendColor = slopePower > 0 ? color.lime : color.red
+phaseText = isImpulse ? "🔥 Impulso" : isCooling ? "🌀 Enfriamiento" : isReversal ? "⚠️ Riesgo de Reversión" : "⛔ Neutral"
+
+// PHASE MEMORY ENGINE \
+var string prevPhase = na
+phaseChanged = not na(prevPhase) and phaseText != prevPhase
+slopeScore = math.round(math.abs(slopePower) * 1.5)
+
+// CONFIDENCE SCORING ENGINE \
+[plusDI, minusDI, adx] = ta.dmi(14, 14)
+trendStrength = math.min(adx, 50) / 50
+directionBias = math.abs(plusDI - minusDI) / 100
+volatilityRatio = math.min(atr / math.max(math.abs(emaFast - emaSlow), 0.0001), 3.0) / 3.0
+
+// CONFIDENCE SCORE \
+confidenceRaw = (trendStrength + directionBias + slopeNorm + (1 - volatilityRatio)) / 4
+confidenceScore = math.round(confidenceRaw * 100 * decayFactor)
+confidenceLabel = confidenceScore >= 75 ? "Alta" : confidenceScore >= 50 ? "Media" : "Baja"
+
+// REVERSAL SENSOR ENGINE \
+slopeFlipping = ta.change(math.sign(slopePower)) != 0
+slopeCollapsing = math.abs(slopePower) < 10
+rsiDropping = rsi < 45
+reversalRisk = (slopeFlipping and slopeCollapsing) or (rsiDropping and slopePower < 0)
+
+// REVERSE SYMMETRY \
+isBullishReversal = reversalRisk and slopePower > 15 and close > emaFast and close > emaSlow
+isBearishReversal = reversalRisk and slopePower < -15 and close < emaFast and close < emaSlow
+isReversingNow = isBullishReversal or isBearishReversal
+reversalLabel = isBullishReversal ? "🚀 Reversión Bullish" : isBearishReversal ? "🚨 Reversión Bearish" : reversalRisk ? "⚠️ Amenaza de Reversión" : "✅ Estable"
+
+// RECOVERY DETECTION ENGINE \
+wasBearish = trendDir[1] == "Bearish"
+emaCrossover = close > emaFast and close[1] < emaFast[1] and close > emaSlow
+recoveryBounce = isBullishReversal and wasBearish and emaCrossover
+
+// STALL DETECTOR ENGINE \
+slopeLow = math.abs(slopePower) < stallSlopeLimit
+rsiFlat = rsi > rsiFlatMin and rsi < rsiFlatMax
+atrCompression = atr < ta.sma(atr, 20)
+stallDetected = rsiFlat and slopeLow and atrCompression
+stallLabel = stallDetected ? "🛑 Rango Estancado" : "✅ Active"
+
+// SLOPE PROJECTION ENGINE \
+slopeNow = slopeDeg
+slopePrev = math.atan((emaFast[1] - emaSlow[1]) / atr[1]) * 180 / math.pi
+slopePrev2 = math.atan((emaFast[2] - emaSlow[2]) / atr[2]) * 180 / math.pi
+
+slopeDelta = slopeNow - slopePrev
+slopeAccel = slopeDelta - (slopePrev - slopePrev2)
+slopeForecast = slopeNow + slopeDelta + slopeAccel
+
+// ADAPTIVE SLOPE CLAMPING ENGINE \
+baseClamp = 30.0
+dynamicRange = 15.0
+forecastVolatilityFactor = math.min(math.max((atr / ta.sma(atr, 50) + ta.stdev(slopePower, 50) / 30) / 2, 0.5), 1.5)
+adaptiveClamp = baseClamp + (forecastVolatilityFactor - 1.0) * dynamicRange
+slopeForecastClamped = math.max(math.min(slopeForecast, adaptiveClamp), -adaptiveClamp)
+
+// SLOPE PROJECTION CONFIDENCE \
+slopeMomentum = math.abs(slopeAccel)
+forecastConfidence = slopeMomentum > 2.5 ? "Alta" : slopeMomentum > 1.0 ? "Media" : "Baja"
+
+projectionLabel = slopeForecastClamped > 15 ? "📈 En ascenso" : slopeForecastClamped < -15 ? "📉 En descenso" : "➖ En rango"
+projectionValue = " (" + str.tostring(math.round(slopeForecastClamped)) + "°, " + forecastConfidence + " Confianza)"
+
+// EARLY TREND CHANGE FORECASTING \
+forecastSignFlip = math.sign(slopePower) != math.sign(slopeForecastClamped)
+forecastAcceleration = math.abs(slopeAccel) >= forecastAccelerationThreshold
+forecastedReversal = forecastSignFlip and forecastAcceleration and math.abs(slopeForecastClamped) >= forecastSlopeThreshold
+forecastBullish = forecastedReversal and slopeForecastClamped > 0
+forecastBearish = forecastedReversal and slopeForecastClamped < 0
+
+var int lastForecastBull = na
+var int lastForecastBear = na
+if forecastBullish
+    lastForecastBull := bar_index
+if forecastBearish
+    lastForecastBear := bar_index
+
+forecastInWindowBull = not na(lastForecastBull) and (bar_index - lastForecastBull) <= forecastLookahead
+forecastInWindowBear = not na(lastForecastBear) and (bar_index - lastForecastBear) <= forecastLookahead
+
+// MOMENTUM FADING DETECTION \
+slopeFading = ta.change(slopePower) < 0 and not stallDetected and not reversalRisk and math.abs(slopePower) > 15
+momentumFading = slopeFading and slopePower[1] > slopePower[2] and slopePower > 5
+
+// SMART ENTRY WINDOW DETECTION \
+impulseActive = isImpulse and slopePower > 10 and confidenceScore >= 60
+pulledBack = close[1] < emaFast[1] and close > emaFast and low < emaFast
+smartEntryWindow = impulseActive and pulledBack
+plotshape(smartEntryWindow, title="Smart Entry", location=location.belowbar, style=shape.triangleup, size=size.small, color=color.teal)
+
+// EARLY CONFIRMATION ENGINE \
+confirmWindowBull = confirmRequireForecast ? (not na(lastForecastBull) and (bar_index - lastForecastBull) <= confirmWindow) : true
+confirmWindowBear = confirmRequireForecast ? (not na(lastForecastBear) and (bar_index - lastForecastBear) <= confirmWindow) : true
+
+confirmBullishCore = (ta.crossover(slopeDeg, 0) or ta.crossover(emaFast, emaSlow) or ta.crossover(plusDI, minusDI))
+confirmBearishCore = (ta.crossunder(slopeDeg, 0) or ta.crossunder(emaFast, emaSlow) or ta.crossunder(plusDI, minusDI))
+
+confirmBullish = confirmWindowBull and confirmBullishCore and slopePower > confirmSlopeThreshold and adx >= confirmAdxThreshold
+confirmBearish = confirmWindowBear and confirmBearishCore and slopePower < -confirmSlopeThreshold and adx >= confirmAdxThreshold
+
+plotshape(showForecast and forecastBullish, title="Forecast Bullish", location=location.belowbar, style=shape.circle, size=size.tiny, color=color.new(color.lime, 0), text="PRE")
+plotshape(showForecast and forecastBearish, title="Forecast Bearish", location=location.abovebar, style=shape.circle, size=size.tiny, color=color.new(color.red, 0), text="PRE")
+//plotshape(showConfirmation and confirmBullish, title="Confirm Bullish", location=location.belowbar, style=shape.triangleup, size=size.small, color=color.new(color.green, 0), text="OK")
+//plotshape(showConfirmation and confirmBearish, title="Confirm Bearish", location=location.abovebar, style=shape.triangledown, size=size.small, color=color.new(color.maroon, 0), text="OK")
+
+// FIRST CONFIRMATION MARKERS \
+var string lastConfirmedTrend = na
+firstConfirmBullish = confirmBullish and lastConfirmedTrend != "Bullish"
+firstConfirmBearish = confirmBearish and lastConfirmedTrend != "Bearish"
+if firstConfirmBullish
+    lastConfirmedTrend := "Bullish"
+if firstConfirmBearish
+    lastConfirmedTrend := "Bearish"
+
+plotshape(firstConfirmBullish, title="First Bullish Confirmation", location=location.belowbar, style=shape.triangleup, size=size.small, color=#93e004, text="OK", textcolor = #93e004)
+plotshape(firstConfirmBearish, title="First Bearish Confirmation", location=location.abovebar, style=shape.triangledown, size=size.small, color=color.new(#f39720, 0), text="OK", textcolor = color.new(#f39720, 0))
+
+// COMMENTARY GENERATOR \
+aiCommentary = phaseChanged ? "🔄 Cambio de fase:\n" + prevPhase + " → " + phaseText :
+               forecastBullish ? "🔮 Posible reversión alcista\nImpulso previsto en " + str.tostring(forecastLookahead) + " velas.\n(" + sessionPhase + ")" :
+               forecastBearish ? "🔮 Posible reversión bajista\nImpulso previsto en " + str.tostring(forecastLookahead) + " velas.\n(" + sessionPhase + ")" :
+               confirmBullish ? "✅ Reversión alcista confirmada\nConfirmación temprana detectada.\n(" + sessionPhase + ")" :
+               confirmBearish ? "✅ Reversión bajista confirmada\nConfirmación temprana detectada.\n(" + sessionPhase + ")" :
+               recoveryBounce ? "🔁 Recuperación del rally\nRebote recuperando \nla estructura de tendencia.\n(" + sessionPhase + ")" :
+               smartEntryWindow ? "🎯 Ventana de entrada inteligente\nRetroceso de impulso con recuperación.\n(" + sessionPhase + ")" :
+               momentumFading ? "🪫 Debilitamiento del impulso\nLa tendencia podría perder fuerza pronto.\n(" + sessionPhase + ")" :
+               isImpulse and confidenceScore >= 75 and not reversalRisk ? "📈 Fuerte formación de tendencia\nConsidera aprovechar el impulso.\n(" + sessionPhase + ")" :
+               isCooling and confidenceScore >= 50 ? "🌀 La tendencia se está desacelerando\nPrecaución si ya estás en posición.\n(" + sessionPhase + ")" :
+               stallDetected and not isImpulse ? "⏸️ Estancamiento de precios\nEste no es el momento de entrar.\n(" + sessionPhase + ")" :
+               isBullishReversal ? "🚀 Reversión Alcista Confirmada\nRuptura en progreso.\n(" + sessionPhase + ")" :
+               isBearishReversal ? "🚨 Reversión Bajista Confirmada\nRuptura en progreso.\n(" + sessionPhase + ")" :
+               reversalRisk and confidenceScore < 50 ? "⚠️ Amenaza de reversión creciente\nEstate atento a rupturas o rebotes.\n(" + sessionPhase + ")" :
+               confidenceScore < 30 ? "🧪 Tendencia de baja convicción\nMejor esperar a que haya claridad.\n(" + sessionPhase + ")" :
+               "➖ Tendencia estable\nNo se requiere ninguna acción\nen este momento.\n(" + sessionPhase + ")"
+
+alertcondition(isBullishReversal, title = "Bullish confirmed", message = "{{ticker}} LONG Trend Confirmed")
+alertcondition(isBearishReversal, title = "Bearish confirmed", message = "{{ticker}} SHORT Trend Confirmed")
+alertcondition(enableAlerts and forecastBullish, title = "Forecast bullish", message = "{{ticker}} Early bullish reversal forecast")
+alertcondition(enableAlerts and forecastBearish, title = "Forecast bearish", message = "{{ticker}} Early bearish reversal forecast")
+alertcondition(enableAlerts and confirmBullish, title = "Confirm bullish", message = "{{ticker}} Early bullish reversal confirmed")
+alertcondition(enableAlerts and confirmBearish, title = "Confirm bearish", message = "{{ticker}} Early bearish reversal confirmed")
+
+// CAMBIA LA FASE
+prevPhase := phaseText
+
+
+// --------------------------
+plotshape(phaseChanged and isBullishReversal, title="First Bullish Confirmation", location=location.belowbar, style=shape.triangleup, size=size.small, color=color.new(#302994, 0), text="OK")
+plotshape(phaseChanged and isBearishReversal, title="First Bearish Confirmation", location=location.abovebar, style=shape.triangledown, size=size.small, color=color.new(#342ca0, 0), text="OK")
+
+
+var label commentaryLabel = na
+if showCommentary and not na(high)
+    if not na(commentaryLabel)
+        label.delete(commentaryLabel)
+    commentaryLabel := showCommentary and not na(high) ? label.new(bar_index, math.max(high, high[1], high[2]) + atr * ndistance, aiCommentary, xloc.bar_index, yloc.price, style=label.style_label_down, size=size.normal, textcolor=commentaryTextColor, color=color.new(#eece89, 85), textalign=text.align_center, tooltip="NeuroTrend Commentary") : commentaryLabel
+
+// DASHBOARD RENDERING \
+var table dashboard = table.new(pos, 7, 2, border_width=1, frame_color=color.new(color.white, 90), bgcolor=color.new(color.navy, 95))
+
+if bar_index % 5 == 0
+    table.cell(dashboard, 0, 0, "🧠 Fase", text_color=tableTextColor, bgcolor=color.new(color.black, 85), text_size=size.small)
+    table.cell(dashboard, 0, 1, phaseText, text_color=tableTextColor, bgcolor=color.new(trendColor, 20), text_size=size.small)
+
+    table.cell(dashboard, 1, 0, "📈 Dirección", text_color=tableTextColor, bgcolor=color.new(color.black, 85), text_size=size.small)
+    table.cell(dashboard, 1, 1, trendDir, text_color=tableTextColor, bgcolor=color.new(trendColor, 10), text_size=size.small)
+
+    table.cell(dashboard, 2, 0, "🔋 Potencia de Pendiente", text_color=tableTextColor, bgcolor=color.new(color.black, 85), text_size=size.small)
+    table.cell(dashboard, 2, 1, str.tostring(slopeScore) + " / 100", text_color=tableTextColor, bgcolor=color.new(trendColor, 85), text_size=size.small)
+
+if showConfidence
+    table.cell(dashboard, 3, 0, "🧠 Confianza", text_color=tableTextColor, bgcolor=color.new(color.black, 85), text_size=size.small)
+    table.cell(dashboard, 3, 1, confidenceLabel + " (" + str.tostring(confidenceScore) + ")", text_color=tableTextColor, bgcolor=color.new(trendColor, 80), text_size=size.small)
+
+if showReversal
+    table.cell(dashboard, 4, 0, "🚨 Riesgo de Reversión", text_color=tableTextColor, bgcolor=color.new(color.black, 85), text_size=size.small)
+    table.cell(dashboard, 4, 1, reversalLabel, text_color=tableTextColor, bgcolor=reversalRisk ? color.new(color.red, 60) : color.new(color.green, 80), text_size=size.small)
+
+if showStall
+    table.cell(dashboard, 5, 0, "⏸️ Momentum", text_color=tableTextColor, bgcolor=color.new(color.black, 85), text_size=size.small)
+    table.cell(dashboard, 5, 1, stallLabel, text_color=tableTextColor, bgcolor=stallDetected ? color.new(color.orange, 60) : color.new(color.green, 80), text_size=size.small)
+
+if showProjection
+    table.cell(dashboard, 6, 0, "📡 Proyección", text_color=tableTextColor, bgcolor=color.new(color.black, 85), text_size=size.small)
+    table.cell(dashboard, 6, 1, projectionLabel + projectionValue, text_color=tableTextColor, bgcolor=color.new(trendColor, 70), text_size=size.small)
+
+// SMART ALERT CONDITION \
+
+customAlertCondition =
+     customEnableAlerts and
+     confidenceScore >= customMinConfidence and
+     (not customRequireImpulse or isImpulse) and
+     (not customRequireBullish or slopePower > 0) and
+     (not customRequireBearish or slopePower < 0) and
+     (not customBlockReversal or not reversalRisk) and
+     (not customBlockStall or not stallDetected)
+
+alertcondition(customAlertCondition, title="Custom NeuroTrend Alert", message="🔔 NeuroTrend: Your custom alert conditions have been met.")
+
+//  BUY / SELL SIGNAL LABELS \
+showBuySellLabels = input.bool(true, "Show Buy/Sell Labels", group="Neuro Settings")
+
+buySignal  = ta.crossover(slopeDeg, 0) and slopePower > 0
+sellSignal = ta.crossunder(slopeDeg, 0) and slopePower < 0
+
+
+//MGD - Si han pasado 10 barras, desactivamos lastBar y contamos de nuevo
+if na(lastBar)
+    if bar_index > lastBar + 10
+        lastBar := na
+        lastSignal := ""
+
+
+//MGD - ligeramente modificado para que no muestre dos señales seguidas en la misma direción
+offset = input.float(5, title="Offset Distance", step=0.1, tooltip="Distancia desde la vela", minval=0.1, maxval=15)
+var float natr = ta.atr(1)
+if showBuySellLabels
+    if buySignal and lastSignal != "BUY"
+        distancia = low - (offset * natr)
+        label.new(bar_index, distancia, "COMPRA\nNeuroTrend", style=label.style_label_up, color=color.green, textcolor=color.white, yloc=yloc.price, size=size.small)
+        lastSignal := "BUY"
+        lastBar := bar_index
+    if sellSignal and lastSignal != "SELL"
+        distancia = high + (offset * natr)
+        label.new(bar_index, distancia, "VENDE\nNeuroTrend", style=label.style_label_down, color=color.red, textcolor=color.white, yloc=yloc.price, size=size.small)
+        lastSignal := "SELL"
+        lastBar := bar_index
